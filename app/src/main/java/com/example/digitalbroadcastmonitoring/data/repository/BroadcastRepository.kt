@@ -1,20 +1,29 @@
 package com.example.digitalbroadcastmonitoring.data.repository
 
+import android.util.Log
+import com.example.digitalbroadcastmonitoring.data.api.ApiClient
+import com.example.digitalbroadcastmonitoring.data.api.NetworkResult
+import com.example.digitalbroadcastmonitoring.data.api.dto.*
+import com.example.digitalbroadcastmonitoring.data.api.toCreateRequest
+import com.example.digitalbroadcastmonitoring.data.api.toDomain
+import com.example.digitalbroadcastmonitoring.data.api.toUpdateRequest
 import com.example.digitalbroadcastmonitoring.data.model.*
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import java.util.UUID
 
 object BroadcastRepository {
 
+    private const val TAG = "BroadcastRepo"
+    private val repositoryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val timeFormat = SimpleDateFormat("HH:mm", Locale.US)
     private val dateTimeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
 
-    // Initial Programs Mock Data (24 baseline programs)
+    // Initial Baseline Programs (for offline or initial render)
     private val initialPrograms = listOf(
         Program(
             id = "prog-001",
@@ -141,12 +150,9 @@ object BroadcastRepository {
         Program(id = "prog-024", title = "Midday Speed News", channel = "DD National HD", category = ProgramCategory.NEWS, durationMinutes = 30, description = "Rapid 50 top stories bulletin.")
     )
 
-    // Initial Schedules Mock Data (Today's broadcasts)
     private val todayDate = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
 
-    // 8 broadcasts today: 3 visible + 5 remaining
     private val initialSchedules = listOf(
-        // 1. Morning News: 10:00–10:30 AM, 30 minutes, Completed
         BroadcastSchedule(
             id = "sch-101",
             programId = "prog-001",
@@ -160,7 +166,6 @@ object BroadcastRepository {
             hasOverlap = false,
             notes = "Morning news bulletin completed on schedule."
         ),
-        // 2. Educational Hour: 11:00 AM–12:00 PM, 60 minutes, Live
         BroadcastSchedule(
             id = "sch-102",
             programId = "prog-002",
@@ -174,7 +179,6 @@ object BroadcastRepository {
             hasOverlap = false,
             notes = "On-air stream live. Video and audio nominal."
         ),
-        // 3. Documentary Special: 12:00–12:45 PM, 45 minutes, Scheduled
         BroadcastSchedule(
             id = "sch-103",
             programId = "prog-003",
@@ -188,7 +192,6 @@ object BroadcastRepository {
             hasOverlap = false,
             notes = "Scheduled transmission ingest ready."
         ),
-        // Remaining 5 broadcasts today (total 8)
         BroadcastSchedule(
             id = "sch-104",
             programId = "prog-005",
@@ -256,7 +259,6 @@ object BroadcastRepository {
         )
     )
 
-    // Initial Alerts with Schedule-overlap and Unusual-duration alerts
     private val initialAlerts = listOf(
         AlertItem(
             id = "alt-01",
@@ -280,6 +282,7 @@ object BroadcastRepository {
         )
     )
 
+    // Observable States
     private val _programs = MutableStateFlow(initialPrograms)
     val programs: StateFlow<List<Program>> = _programs.asStateFlow()
 
@@ -289,60 +292,438 @@ object BroadcastRepository {
     private val _alerts = MutableStateFlow(initialAlerts)
     val alerts: StateFlow<List<AlertItem>> = _alerts.asStateFlow()
 
+    private val _dashboardMetrics = MutableStateFlow(
+        DashboardMetrics(
+            totalPrograms = 24,
+            totalBroadcasts = 8,
+            completedCount = 1,
+            liveCount = 1,
+            scheduledCount = 6,
+            anomaliesCount = 1,
+            warningsCount = 1,
+            activeChannels = 8,
+            streamHealthPercent = 91,
+            complianceRate = 96.0f,
+            lastCheckedTimestamp = SimpleDateFormat("hh:mm:ss a", Locale.US).format(Date()) + " IST"
+        )
+    )
+    val dashboardMetrics: StateFlow<DashboardMetrics> = _dashboardMetrics.asStateFlow()
+
+    private val _reportsData = MutableStateFlow(
+        ReportsData(
+            totalPrograms = 24,
+            totalBroadcasts = 8,
+            completedCount = 1,
+            liveCount = 1,
+            scheduledCount = 6,
+            totalDurationMinutes = 510,
+            totalDurationHours = 8,
+            totalDurationRemainMinutes = 30,
+            complianceRate = 96.0f
+        )
+    )
+    val reportsData: StateFlow<ReportsData> = _reportsData.asStateFlow()
+
+    private val _connectionStatus = MutableStateFlow(ConnectionStatus.CONNECTING)
+    val connectionStatus: StateFlow<ConnectionStatus> = _connectionStatus.asStateFlow()
+
+    private val _isLoading = MutableStateFlow(false)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
+    private val _lastErrorMessage = MutableStateFlow<String?>(null)
+    val lastErrorMessage: StateFlow<String?> = _lastErrorMessage.asStateFlow()
+
     private val _lastRefreshTime = MutableStateFlow(SimpleDateFormat("hh:mm:ss a", Locale.US).format(Date()) + " IST")
     val lastRefreshTime: StateFlow<String> = _lastRefreshTime.asStateFlow()
 
+    private val _syncFeedback = MutableStateFlow<SyncFeedback?>(null)
+    val syncFeedback: StateFlow<SyncFeedback?> = _syncFeedback.asStateFlow()
+
+    fun clearSyncFeedback() {
+        _syncFeedback.value = null
+    }
+
+    init {
+        // Trigger background initial sync on startup
+        refreshData()
+    }
+
+    /**
+     * Refreshes all data by querying backend endpoints asynchronously.
+     * Retains fallback in-memory data if the server is temporarily unreachable.
+     */
     fun refreshData() {
-        _lastRefreshTime.value = SimpleDateFormat("hh:mm:ss a", Locale.US).format(Date()) + " IST"
-    }
+        _isLoading.value = true
+        _connectionStatus.value = ConnectionStatus.CONNECTING
+        val currentTime = SimpleDateFormat("hh:mm:ss a", Locale.US).format(Date()) + " IST"
 
-    // Program CRUD
-    fun addProgram(program: Program) {
-        _programs.value = listOf(program) + _programs.value
-    }
+        repositoryScope.launch {
+            Log.i(TAG, "Sync Feed triggered. Connecting to backend at: ${ApiClient.getBaseUrl()}")
+            // Slight delay ensures the UI loading state is visible to user even on instantaneous local loopback
+            delay(200)
 
-    fun updateProgram(updated: Program) {
-        _programs.value = _programs.value.map { if (it.id == updated.id) updated else it }
-        // Also sync programTitle in schedules if title updated
-        _schedules.value = _schedules.value.map {
-            if (it.programId == updated.id) it.copy(programTitle = updated.title, channel = updated.channel) else it
+            try {
+                // 1. Health check
+                val healthResult = ApiClient.safeApiCall { ApiClient.getService().getHealth() }
+                if (healthResult is NetworkResult.Success) {
+                    _connectionStatus.value = ConnectionStatus.ONLINE
+                    _lastErrorMessage.value = null
+
+                    // 2. Load dashboard metrics from backend
+                    val dashResult = ApiClient.safeApiCall { ApiClient.getService().getDashboard() }
+                    if (dashResult is NetworkResult.Success) {
+                        _dashboardMetrics.value = dashResult.data.toDomain()
+                        Log.d(TAG, "Dashboard metrics loaded successfully")
+                    } else if (dashResult is NetworkResult.Error) {
+                        Log.w(TAG, "Dashboard endpoint returned error: ${dashResult.message}")
+                    }
+
+                    // 3. Load programs from backend
+                    val progResult = ApiClient.safeApiCall { ApiClient.getService().getPrograms() }
+                    var progCount = _programs.value.size
+                    if (progResult is NetworkResult.Success) {
+                        val mappedPrograms = progResult.data.map { it.toDomain() }
+                        _programs.value = mappedPrograms
+                        progCount = mappedPrograms.size
+                        Log.d(TAG, "Loaded $progCount programs from backend")
+                    } else if (progResult is NetworkResult.Error) {
+                        Log.w(TAG, "Programs endpoint returned error: ${progResult.message}")
+                    }
+
+                    // 4. Load schedules from backend
+                    val schedResult = ApiClient.safeApiCall { ApiClient.getService().getSchedules() }
+                    var schedCount = _schedules.value.size
+                    if (schedResult is NetworkResult.Success) {
+                        val mappedSchedules = schedResult.data.map { it.toDomain() }
+                        _schedules.value = mappedSchedules
+                        schedCount = mappedSchedules.size
+                        Log.d(TAG, "Loaded $schedCount schedules from backend")
+                    } else if (schedResult is NetworkResult.Error) {
+                        Log.w(TAG, "Schedules endpoint returned error: ${schedResult.message}")
+                    }
+
+                    // 5. Load alerts from backend
+                    val alertResult = ApiClient.safeApiCall { ApiClient.getService().getAlerts() }
+                    if (alertResult is NetworkResult.Success) {
+                        _alerts.value = alertResult.data.map { it.toDomain() }
+                        Log.d(TAG, "Loaded ${_alerts.value.size} alerts from backend")
+                    } else if (alertResult is NetworkResult.Error) {
+                        Log.w(TAG, "Alerts endpoint returned error: ${alertResult.message}")
+                    }
+
+                    // 6. Load reports from backend
+                    val repResult = ApiClient.safeApiCall { ApiClient.getService().getReports() }
+                    if (repResult is NetworkResult.Success) {
+                        _reportsData.value = repResult.data.toDomain()
+                        Log.d(TAG, "Reports data loaded successfully")
+                    } else if (repResult is NetworkResult.Error) {
+                        Log.w(TAG, "Reports endpoint returned error: ${repResult.message}")
+                    }
+
+                    val updatedTime = SimpleDateFormat("hh:mm:ss a", Locale.US).format(Date()) + " IST"
+                    _lastRefreshTime.value = updatedTime
+                    _syncFeedback.value = SyncFeedback(
+                        isSuccess = true,
+                        message = "Synchronized $schedCount broadcast schedules & $progCount programs from backend",
+                        timestamp = "Synced at $updatedTime"
+                    )
+                    Log.i(TAG, "Sync Feed completed successfully at $updatedTime")
+                } else if (healthResult is NetworkResult.Error) {
+                    _connectionStatus.value = ConnectionStatus.OFFLINE
+                    _lastErrorMessage.value = healthResult.message
+                    _syncFeedback.value = SyncFeedback(
+                        isSuccess = false,
+                        message = "Sync failed: ${healthResult.message}",
+                        timestamp = "Attempted at $currentTime",
+                        isError = true
+                    )
+                    Log.e(TAG, "Sync Feed failed: Health check error: ${healthResult.message}")
+                }
+            } catch (e: Exception) {
+                val errMsg = e.localizedMessage ?: "Unexpected network error"
+                _connectionStatus.value = ConnectionStatus.OFFLINE
+                _lastErrorMessage.value = errMsg
+                _syncFeedback.value = SyncFeedback(
+                    isSuccess = false,
+                    message = "Sync failed: $errMsg",
+                    timestamp = "Attempted at $currentTime",
+                    isError = true
+                )
+                Log.e(TAG, "Sync Feed failed with exception: $errMsg", e)
+            } finally {
+                _isLoading.value = false
+            }
         }
     }
 
-    fun deleteProgram(programId: String) {
+    // Program CRUD Operations with Backend Integration
+    fun addProgram(program: Program, onResult: (NetworkResult<Program>) -> Unit = {}) {
+        // Optimistic local update
+        _programs.value = listOf(program) + _programs.value
+
+        repositoryScope.launch {
+            val result = ApiClient.safeApiCall {
+                ApiClient.getService().createProgram(program.toCreateRequest())
+            }
+            withContext(Dispatchers.Main) {
+                when (result) {
+                    is NetworkResult.Success -> {
+                        val created = result.data.toDomain()
+                        _programs.value = _programs.value.map { if (it.id == program.id) created else it }
+                        refreshData()
+                        onResult(NetworkResult.Success(created))
+                    }
+                    is NetworkResult.Error -> {
+                        _lastErrorMessage.value = result.message
+                        onResult(result)
+                    }
+                    NetworkResult.Loading -> {}
+                }
+            }
+        }
+    }
+
+    fun updateProgram(updated: Program, onResult: (NetworkResult<Program>) -> Unit = {}) {
+        _programs.value = _programs.value.map { if (it.id == updated.id) updated else it }
+        _schedules.value = _schedules.value.map {
+            if (it.programId == updated.id) it.copy(programTitle = updated.title, channel = updated.channel) else it
+        }
+
+        repositoryScope.launch {
+            val result = ApiClient.safeApiCall {
+                ApiClient.getService().updateProgram(updated.id, updated.toUpdateRequest())
+            }
+            withContext(Dispatchers.Main) {
+                when (result) {
+                    is NetworkResult.Success -> {
+                        val res = result.data.toDomain()
+                        _programs.value = _programs.value.map { if (it.id == updated.id) res else it }
+                        refreshData()
+                        onResult(NetworkResult.Success(res))
+                    }
+                    is NetworkResult.Error -> {
+                        _lastErrorMessage.value = result.message
+                        onResult(result)
+                    }
+                    NetworkResult.Loading -> {}
+                }
+            }
+        }
+    }
+
+    fun deleteProgram(programId: String, onResult: (NetworkResult<Unit>) -> Unit = {}) {
         _programs.value = _programs.value.filter { it.id != programId }
         _schedules.value = _schedules.value.filter { it.programId != programId }
+
+        repositoryScope.launch {
+            val result = ApiClient.safeApiCall {
+                ApiClient.getService().deleteProgram(programId)
+            }
+            withContext(Dispatchers.Main) {
+                when (result) {
+                    is NetworkResult.Success -> {
+                        refreshData()
+                        onResult(NetworkResult.Success(Unit))
+                    }
+                    is NetworkResult.Error -> {
+                        _lastErrorMessage.value = result.message
+                        onResult(result)
+                    }
+                    NetworkResult.Loading -> {}
+                }
+            }
+        }
     }
 
     fun getProgramById(id: String): Program? {
         return _programs.value.find { it.id == id }
     }
 
-    // Schedule CRUD
-    fun addSchedule(schedule: BroadcastSchedule): Boolean {
-        // Validate overlaps
-        val overlap = checkOverlap(schedule.channel, schedule.date, schedule.startTime, schedule.endTime)
-        val finalSchedule = schedule.copy(hasOverlap = overlap)
-        _schedules.value = _schedules.value + finalSchedule
-        return !overlap
+    // Schedule CRUD Operations with Overlap & Conflict Handling
+    fun addSchedule(
+        schedule: BroadcastSchedule,
+        onResult: (NetworkResult<BroadcastSchedule>) -> Unit = {}
+    ): Boolean {
+        // Synchronous rule check for immediate UI responsiveness
+        val localOverlap = checkOverlap(schedule.channel, schedule.date, schedule.startTime, schedule.endTime)
+        val candidate = schedule.copy(hasOverlap = localOverlap)
+
+        repositoryScope.launch {
+            val result = ApiClient.safeApiCall {
+                ApiClient.getService().createSchedule(schedule.toCreateRequest())
+            }
+            withContext(Dispatchers.Main) {
+                when (result) {
+                    is NetworkResult.Success -> {
+                        val created = result.data.toDomain()
+                        _schedules.value = _schedules.value.filter { it.id != schedule.id } + created
+                        refreshData()
+                        onResult(NetworkResult.Success(created))
+                    }
+                    is NetworkResult.Error -> {
+                        _lastErrorMessage.value = result.message
+                        onResult(result)
+                    }
+                    NetworkResult.Loading -> {}
+                }
+            }
+        }
+
+        // Return whether local check passed (optimistic)
+        return !localOverlap
     }
 
-    fun updateSchedule(updated: BroadcastSchedule): Boolean {
-        val overlap = checkOverlap(updated.channel, updated.date, updated.startTime, updated.endTime, excludeId = updated.id)
-        val finalSchedule = updated.copy(hasOverlap = overlap)
-        _schedules.value = _schedules.value.map { if (it.id == updated.id) finalSchedule else it }
-        return !overlap
+    fun updateSchedule(
+        updated: BroadcastSchedule,
+        onResult: (NetworkResult<BroadcastSchedule>) -> Unit = {}
+    ): Boolean {
+        val localOverlap = checkOverlap(updated.channel, updated.date, updated.startTime, updated.endTime, excludeId = updated.id)
+
+        repositoryScope.launch {
+            val result = ApiClient.safeApiCall {
+                ApiClient.getService().updateSchedule(updated.id, updated.toUpdateRequest())
+            }
+            withContext(Dispatchers.Main) {
+                when (result) {
+                    is NetworkResult.Success -> {
+                        val res = result.data.toDomain()
+                        _schedules.value = _schedules.value.map { if (it.id == updated.id) res else it }
+                        refreshData()
+                        onResult(NetworkResult.Success(res))
+                    }
+                    is NetworkResult.Error -> {
+                        _lastErrorMessage.value = result.message
+                        onResult(result)
+                    }
+                    NetworkResult.Loading -> {}
+                }
+            }
+        }
+
+        return !localOverlap
     }
 
-    fun deleteSchedule(scheduleId: String) {
+    fun deleteSchedule(scheduleId: String, onResult: (NetworkResult<Unit>) -> Unit = {}) {
         _schedules.value = _schedules.value.filter { it.id != scheduleId }
+
+        repositoryScope.launch {
+            val result = ApiClient.safeApiCall {
+                ApiClient.getService().deleteSchedule(scheduleId)
+            }
+            withContext(Dispatchers.Main) {
+                when (result) {
+                    is NetworkResult.Success -> {
+                        refreshData()
+                        onResult(NetworkResult.Success(Unit))
+                    }
+                    is NetworkResult.Error -> {
+                        _lastErrorMessage.value = result.message
+                        onResult(result)
+                    }
+                    NetworkResult.Loading -> {}
+                }
+            }
+        }
     }
 
     fun getScheduleById(id: String): BroadcastSchedule? {
         return _schedules.value.find { it.id == id }
     }
 
-    // Overlap validation logic
+    // Schedule Analysis (Deterministic Rule + Real ML Anomaly Inference)
+    fun fetchScheduleAnalysis(
+        scheduleId: String,
+        onResult: (NetworkResult<ScheduleAnalysisResult>) -> Unit
+    ) {
+        repositoryScope.launch {
+            val result = ApiClient.safeApiCall {
+                ApiClient.getService().getScheduleAnalysis(scheduleId)
+            }
+            withContext(Dispatchers.Main) {
+                when (result) {
+                    is NetworkResult.Success -> {
+                        onResult(NetworkResult.Success(result.data.toDomain()))
+                    }
+                    is NetworkResult.Error -> {
+                        // Fallback to local rule evaluation if server unavailable
+                        val sched = getScheduleById(scheduleId)
+                        if (sched != null) {
+                            val localRule = performRuleBasedValidation()
+                            val localSimMl = runSimulatedMlAnalysis(sched.programId)
+                            val fallbackResult = ScheduleAnalysisResult(
+                                schedule = sched,
+                                isValid = !sched.hasOverlap,
+                                ruleStatus = if (sched.hasOverlap) "FAIL" else "PASS",
+                                ruleErrorMessages = if (sched.hasOverlap) listOf("Conflict detected on ${sched.channel}") else emptyList(),
+                                hasOverlap = sched.hasOverlap,
+                                durationMinutes = calculateDurationMinutes(sched.startTime, sched.endTime),
+                                mlAnalysis = RealMlAnalysis(
+                                    modelLoaded = false,
+                                    modelStatus = "OFFLINE_FALLBACK",
+                                    modelType = "Simulated Fallback",
+                                    isAnomaly = localSimMl.anomalyScore > 0.5f,
+                                    anomalyScore = localSimMl.anomalyScore,
+                                    rawDecisionScore = 0.0f,
+                                    latencyMs = localSimMl.latencyMs,
+                                    compliancePrediction = localSimMl.compliancePrediction,
+                                    detectedAnomalies = localSimMl.detectedAnomalies,
+                                    disclaimer = "Server offline. Displaying local simulated heuristics fallback."
+                                )
+                            )
+                            onResult(NetworkResult.Success(fallbackResult))
+                        } else {
+                            onResult(result)
+                        }
+                    }
+                    NetworkResult.Loading -> {}
+                }
+            }
+        }
+    }
+
+    // Machine Learning QoE Stalling Prediction (MUEXLab Model)
+    fun predictStallingRisk(
+        request: StallingRiskRequestDto,
+        onResult: (NetworkResult<StallingRiskResponseDto>) -> Unit
+    ) {
+        repositoryScope.launch {
+            val result = ApiClient.safeApiCall {
+                ApiClient.getService().predictStallingRisk(request)
+            }
+            withContext(Dispatchers.Main) {
+                onResult(result)
+            }
+        }
+    }
+
+    fun fetchMlHealth(
+        onResult: (NetworkResult<MlHealthResponseDto>) -> Unit
+    ) {
+        repositoryScope.launch {
+            val result = ApiClient.safeApiCall {
+                ApiClient.getService().getMlHealth()
+            }
+            withContext(Dispatchers.Main) {
+                onResult(result)
+            }
+        }
+    }
+
+    // Alerts CRUD
+    fun dismissAlert(id: String) {
+        _alerts.value = _alerts.value.filter { it.id != id }
+
+        repositoryScope.launch {
+            ApiClient.safeApiCall { ApiClient.getService().dismissAlert(id) }
+            refreshData()
+        }
+    }
+
+    fun addAlert(alert: AlertItem) {
+        _alerts.value = listOf(alert) + _alerts.value
+    }
+
+    // Helper: Local Overlap validation logic
     fun checkOverlap(
         channel: String,
         date: String,
@@ -366,16 +747,16 @@ object BroadcastRepository {
         }
     }
 
-    // Time Validation
+    // Helper: Time Formatting
     fun parseTimeToMinutes(timeStr: String): Int? {
         return try {
             val parts = timeStr.trim().split(":")
-            if (parts.size == 2) {
+            if (parts.size >= 2) {
                 val hours = parts[0].toInt()
                 val minutes = parts[1].toInt()
                 hours * 60 + minutes
             } else null
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             null
         }
     }
@@ -430,7 +811,7 @@ object BroadcastRepository {
         )
     }
 
-    // Simulated ML Analysis (Strictly SIMULATED)
+    // Simulated ML Analysis (Strictly SIMULATED Fallback)
     fun runSimulatedMlAnalysis(programId: String?): SimulatedMlAnalysis {
         val program = programId?.let { getProgramById(it) } ?: _programs.value.firstOrNull()
         val isAnomaly = program?.videoStatus != StreamStatus.OPTIMAL || program?.audioStatus != StreamStatus.OPTIMAL
@@ -451,14 +832,5 @@ object BroadcastRepository {
                 listOf("No simulated anomalies detected in current buffer")
             }
         )
-    }
-
-    // Alert Actions
-    fun dismissAlert(id: String) {
-        _alerts.value = _alerts.value.filter { it.id != id }
-    }
-
-    fun addAlert(alert: AlertItem) {
-        _alerts.value = listOf(alert) + _alerts.value
     }
 }

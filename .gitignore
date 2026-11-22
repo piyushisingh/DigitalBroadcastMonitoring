@@ -21,3 +21,7 @@ local.properties
 *.jks
 *.keystore
 secrets.properties
+
+# Machine Learning Raw Datasets
+backend/ml/data/raw/
+*.csv

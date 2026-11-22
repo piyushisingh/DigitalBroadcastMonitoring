@@ -41,24 +41,27 @@ fun ReportsScreen(
 
     val scrollState = rememberScrollState()
 
-    // 1. Complete set of seven metrics matching shared Lovable baseline
-    val totalProgramsCount = programs.size // 24
-    val totalBroadcastsCount = 32 + (schedules.size - 8).coerceAtLeast(0) // 32
-    val completedCount = 18 + (schedules.count { it.status == ScheduleStatus.COMPLETED } - 1).coerceAtLeast(0) // 18
-    val liveCount = schedules.count { it.status == ScheduleStatus.LIVE }.coerceAtLeast(1) // 1
-    val scheduledCount = 5 + (schedules.count { it.status == ScheduleStatus.SCHEDULED } - 6).coerceAtLeast(0) // 5
-    val anomaliesCount = alerts.count { it.severity == AlertSeverity.ANOMALY }.coerceAtLeast(2) // 2
-    val flaggedCount = anomaliesCount
+    val reportsData by BroadcastRepository.reportsData.collectAsState()
+    val dashboardMetrics by BroadcastRepository.dashboardMetrics.collectAsState()
 
-    val totalDurationMinutes = schedules.sumOf {
-        BroadcastRepository.calculateDurationMinutes(it.startTime, it.endTime)
-    }
-    val totalDurationHours = totalDurationMinutes / 60
-    val totalDurationRemainMin = totalDurationMinutes % 60
+    // Real Metrics directly from Backend Database Analytics
+    val totalProgramsCount = reportsData.totalPrograms.takeIf { it > 0 } ?: programs.size
+    val totalBroadcastsCount = reportsData.totalBroadcasts.takeIf { it > 0 } ?: schedules.size
+    val completedCount = reportsData.completedCount
+    val liveCount = reportsData.liveCount
+    val scheduledCount = reportsData.scheduledCount
+    val anomaliesCount = dashboardMetrics.anomaliesCount
+    val flaggedCount = reportsData.flaggedCount
 
-    // Category distribution counts
+    val totalDurationMinutes = reportsData.totalDurationMinutes
+    val totalDurationHours = reportsData.totalDurationHours
+    val totalDurationRemainMin = reportsData.totalDurationRemainMinutes
+
+    // Category distribution counts from backend database
     val categoryCounts = ProgramCategory.values().associateWith { cat ->
-        programs.count { it.category == cat }
+        reportsData.categoryDistribution[cat.displayName]
+            ?: reportsData.categoryDistribution[cat.name]
+            ?: programs.count { it.category == cat }
     }
 
     Column(

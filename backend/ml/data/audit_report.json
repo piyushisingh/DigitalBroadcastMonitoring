@@ -1,0 +1,178 @@
+{
+  "dataset_name": "MUEXLab YouTube QoE Session Dataset",
+  "attribution": "Multimedia Experience Laboratory (MUEXLab), University of Zagreb & University of W\u00fcrzburg (2020-2021)",
+  "csv_path": "C:\\Users\\piyushi singh\\AndroidStudioProjects\\DigitalBroadcastMonitoring\\backend\\ml\\data\\raw\\session-dataset.csv",
+  "row_count": 30193,
+  "column_count": 119,
+  "duplicate_rows": 0,
+  "distinct_videos": 1940,
+  "target_column": "stalling_class",
+  "target_distribution": {
+    "False": 18619,
+    "True": 11574
+  },
+  "columns_with_missing_count": 56,
+  "columns_with_missing_details": {
+    "ul_total_bytes": 13,
+    "ul_avg_throughput": 13,
+    "dist_dl_pckt_len_mean": 13,
+    "dist_dl_pckt_len_var": 13,
+    "dist_dl_pckt_len_stdev": 13,
+    "dist_dl_pckt_len_cvar": 13,
+    "dist_dl_pckt_len_skew": 13,
+    "dist_dl_pckt_len_kurt": 13,
+    "dist_dl_pckt_len_min": 13,
+    "dist_dl_pckt_len_max": 13,
+    "dist_ul_pckt_len_mean": 13,
+    "dist_ul_pckt_len_var": 13,
+    "dist_ul_pckt_len_stdev": 13,
+    "dist_ul_pckt_len_cvar": 13,
+    "dist_ul_pckt_len_skew": 13,
+    "dist_ul_pckt_len_kurt": 13,
+    "dist_ul_pckt_len_min": 13,
+    "dist_ul_pckt_len_max": 13,
+    "dist_dl_pckt_len_gt100_mean": 13,
+    "dist_dl_pckt_len_gt100_var": 13,
+    "dist_dl_pckt_len_gt100_stdev": 13,
+    "dist_dl_pckt_len_gt100_cvar": 13,
+    "dist_dl_pckt_len_gt100_skew": 13,
+    "dist_dl_pckt_len_gt100_kurt": 13,
+    "dist_dl_pckt_len_gt100_min": 13,
+    "dist_dl_pckt_len_gt100_max": 13,
+    "dist_ul_pckt_len_gt100_mean": 13,
+    "dist_ul_pckt_len_gt100_var": 13,
+    "dist_ul_pckt_len_gt100_stdev": 13,
+    "dist_ul_pckt_len_gt100_cvar": 13,
+    "dist_ul_pckt_len_gt100_skew": 13,
+    "dist_ul_pckt_len_gt100_kurt": 13,
+    "dist_ul_pckt_len_gt100_min": 13,
+    "dist_ul_pckt_len_gt100_max": 13,
+    "dist_dl_iat_mean": 13,
+    "dist_dl_iat_var": 13,
+    "dist_dl_iat_stdev": 13,
+    "dist_dl_iat_cvar": 13,
+    "dist_dl_iat_skew": 13,
+    "dist_dl_iat_kurt": 13,
+    "dist_dl_iat_min": 13,
+    "dist_dl_iat_max": 13,
+    "dist_ul_iat_mean": 13,
+    "dist_ul_iat_var": 13,
+    "dist_ul_iat_stdev": 13,
+    "dist_ul_iat_cvar": 13,
+    "dist_ul_iat_skew": 13,
+    "dist_ul_iat_kurt": 13,
+    "dist_ul_iat_min": 13,
+    "dist_ul_iat_max": 13,
+    "slotted_dl_data_100ms_cvar": 13,
+    "slotted_ul_data_100ms_cvar": 13,
+    "slotted_dl_data_1s_cvar": 13,
+    "slotted_ul_data_1s_cvar": 13,
+    "slotted_dl_data_10s_cvar": 13,
+    "slotted_ul_data_10s_cvar": 13
+  },
+  "initial_features_selected": [
+    "year",
+    "location",
+    "bandwidth",
+    "adblock",
+    "dl_throughput_first1s",
+    "dl_throughput_first5s",
+    "dl_throughput_first10s"
+  ],
+  "forbidden_predictors": [
+    "video",
+    "stalling_class",
+    "MOS_p1203",
+    "startup_delay_class",
+    "avg_resolution_class",
+    "avg_bitrate_class"
+  ],
+  "schema_discrepancy": {
+    "in_csv_not_documented": [],
+    "in_documented_not_csv": [],
+    "documented_column_count": 119,
+    "csv_column_count": 119,
+    "matches_exact": true
+  },
+  "numeric_feature_summary": {
+    "dl_throughput_first1s": {
+      "min": 0.0,
+      "max": 41430080.0,
+      "mean": 3195289.39,
+      "valid_samples": 30193,
+      "unit": "Bytes/s"
+    },
+    "dl_throughput_first5s": {
+      "min": 0.0,
+      "max": 41114806.4,
+      "mean": 2537247.94,
+      "valid_samples": 30193,
+      "unit": "Bytes/s"
+    },
+    "dl_throughput_first10s": {
+      "min": 0.0,
+      "max": 32477701.6,
+      "mean": 1936289.76,
+      "valid_samples": 30193,
+      "unit": "Bytes/s"
+    }
+  },
+  "categorical_feature_summary": {
+    "year": {
+      "2020": 18243,
+      "2021": 11950
+    },
+    "location": {
+      "Wuerzburg": 14143,
+      "Zagreb": 16050
+    },
+    "bandwidth": {
+      "unlimited": 13440,
+      "1Mbps": 7958,
+      "stochastic": 8795
+    },
+    "adblock": {
+      "0": 14577,
+      "1": 15616
+    }
+  },
+  "documentation": {
+    "year": {
+      "section": "MEASUREMENT METADATA",
+      "description": "the year in which the measurement was taken, contains value \"2020\" or \"2021\""
+    },
+    "location": {
+      "section": "MEASUREMENT METADATA",
+      "description": "the location in which the measurement was taken, contains value \"Wuerzburg\" or \"Zagreb\""
+    },
+    "bandwidth": {
+      "section": "MEASUREMENT METADATA",
+      "description": "bandwidth limitation set for the measurement, contains value \"unlimited\", \"1Mbps\" or \"stochastic\""
+    },
+    "adblock": {
+      "section": "MEASUREMENT METADATA",
+      "description": "if an adblock plugin was used value is set to \"1\", else it is \"0\""
+    },
+    "dl_throughput_first1s": {
+      "section": "TRAFFIC FEATURES",
+      "description": "average downlink throughput in the first second of the measurement [Bytes/s]"
+    },
+    "dl_throughput_first5s": {
+      "section": "TRAFFIC FEATURES",
+      "description": "average downlink throughput in the five seconds of the measurement [Bytes/s]"
+    },
+    "dl_throughput_first10s": {
+      "section": "TRAFFIC FEATURES",
+      "description": "average downlink throughput in the ten seconds of the measurement [Bytes/s]"
+    },
+    "stalling_class": {
+      "section": "ESTIMATION TARGETS",
+      "description": "set to \"false\" if no stalling occurred, else \"true\""
+    },
+    "video": {
+      "section": "MEASUREMENT METADATA",
+      "description": "identifier of the video, contains integer value in interval [1 - 1940]"
+    }
+  },
+  "provenance_disclaimer": "This model is trained on early-session video streaming QoE research data (initial 10s traffic). It predicts whether an encrypted video session will experience playback stalling. It does NOT detect physical television broadcast faults (e.g., RF transmission loss, black frames, or EBU R128 audio clipping) and the Android application does not automatically acquire live broadcast telemetry."
+}

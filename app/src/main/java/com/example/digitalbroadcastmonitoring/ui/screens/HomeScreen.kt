@@ -26,8 +26,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.digitalbroadcastmonitoring.data.model.AlertSeverity
 import com.example.digitalbroadcastmonitoring.data.model.BroadcastSchedule
+import com.example.digitalbroadcastmonitoring.data.model.ConnectionStatus
 import com.example.digitalbroadcastmonitoring.data.model.ScheduleStatus
 import com.example.digitalbroadcastmonitoring.data.model.StreamStatus
+import com.example.digitalbroadcastmonitoring.data.model.SyncFeedback
 import com.example.digitalbroadcastmonitoring.data.repository.BroadcastRepository
 import com.example.digitalbroadcastmonitoring.ui.components.MetricCard
 import com.example.digitalbroadcastmonitoring.ui.components.SeverityBadge
@@ -51,20 +53,24 @@ fun HomeScreen(
     val schedules by BroadcastRepository.schedules.collectAsState()
     val alerts by BroadcastRepository.alerts.collectAsState()
     val lastRefresh by BroadcastRepository.lastRefreshTime.collectAsState()
+    val dashboardMetrics by BroadcastRepository.dashboardMetrics.collectAsState()
+    val connectionStatus by BroadcastRepository.connectionStatus.collectAsState()
+    val isLoading by BroadcastRepository.isLoading.collectAsState()
+    val syncFeedback by BroadcastRepository.syncFeedback.collectAsState()
 
     val todayDateFormatted = SimpleDateFormat("EEEE, dd MMMM yyyy", Locale.US).format(Date())
     val scrollState = rememberScrollState()
 
-    // Metrics matching Lovable specifications with dynamic local updates
-    val totalPrograms = programs.size // Baseline 24
-    val totalBroadcasts = 32 + (schedules.size - 8).coerceAtLeast(0) // Baseline 32
-    val completedCount = 18 + (schedules.count { it.status == ScheduleStatus.COMPLETED } - 1).coerceAtLeast(0) // Baseline 18
-    val liveCount = schedules.count { it.status == ScheduleStatus.LIVE }.coerceAtLeast(1) // Baseline 1
-    val scheduledCount = 5 + (schedules.count { it.status == ScheduleStatus.SCHEDULED } - 6).coerceAtLeast(0) // Baseline 5
-    val anomaliesCount = alerts.count { it.severity == AlertSeverity.ANOMALY }.coerceAtLeast(2) // Baseline 2
+    // Live Metrics directly from Backend Database
+    val totalPrograms = dashboardMetrics.totalPrograms
+    val totalBroadcasts = dashboardMetrics.totalBroadcasts
+    val completedCount = dashboardMetrics.completedCount
+    val liveCount = dashboardMetrics.liveCount
+    val scheduledCount = dashboardMetrics.scheduledCount
+    val anomaliesCount = dashboardMetrics.anomaliesCount
 
     val visibleSchedules = schedules.take(3)
-    val remainingCount = (schedules.size - 3).coerceAtLeast(5)
+    val remainingCount = (schedules.size - 3).coerceAtLeast(0)
 
     Column(
         modifier = Modifier
@@ -168,27 +174,42 @@ fun HomeScreen(
                 )
             }
 
-            // System Status Pill (Operational)
+            // System Status Pill (Reflecting live backend connection status)
+            val (statusText, statusColor, statusContainer) = when (connectionStatus) {
+                ConnectionStatus.ONLINE -> Triple("OPERATIONAL", SuccessGreen, SuccessGreenContainer)
+                ConnectionStatus.CONNECTING -> Triple("SYNCING...", PrimaryBlueVariant, PrimaryBlue.copy(alpha = 0.2f))
+                ConnectionStatus.OFFLINE,
+                ConnectionStatus.ERROR -> Triple("OFFLINE", WarningAmber, WarningAmberContainer)
+            }
+
             Row(
                 modifier = Modifier
                     .clip(RoundedCornerShape(20.dp))
-                    .background(SuccessGreenContainer)
-                    .border(1.dp, SuccessGreen.copy(alpha = 0.4f), RoundedCornerShape(20.dp))
+                    .background(statusContainer)
+                    .border(1.dp, statusColor.copy(alpha = 0.4f), RoundedCornerShape(20.dp))
                     .padding(horizontal = 10.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(8.dp)
-                        .clip(CircleShape)
-                        .background(SuccessGreen)
-                )
+                if (connectionStatus == ConnectionStatus.CONNECTING) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(8.dp),
+                        strokeWidth = 1.5.dp,
+                        color = statusColor
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(statusColor)
+                    )
+                }
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = "OPERATIONAL",
+                    text = statusText,
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
-                    color = SuccessGreen
+                    color = statusColor
                 )
             }
         }
@@ -218,16 +239,106 @@ fun HomeScreen(
 
             TextButton(
                 onClick = { BroadcastRepository.refreshData() },
+                enabled = !isLoading,
                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.Refresh,
-                    contentDescription = "Refresh",
-                    tint = PrimaryBlueVariant,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("Sync Feed", color = PrimaryBlueVariant, style = MaterialTheme.typography.labelMedium)
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(14.dp),
+                        strokeWidth = 2.dp,
+                        color = PrimaryBlueVariant
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Syncing...", color = PrimaryBlueVariant, style = MaterialTheme.typography.labelMedium)
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = "Refresh",
+                        tint = PrimaryBlueVariant,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Sync Feed", color = PrimaryBlueVariant, style = MaterialTheme.typography.labelMedium)
+                }
+            }
+        }
+
+        // Sync Feedback Notification Card (Visible loading/success/error banner)
+        syncFeedback?.let { feedback ->
+            Spacer(modifier = Modifier.height(10.dp))
+            val bannerBg = when {
+                feedback.isError -> AnomalyRedContainer
+                feedback.isSuccess -> SuccessGreenContainer
+                else -> DarkSecondarySurface
+            }
+            val bannerBorder = when {
+                feedback.isError -> AnomalyRed.copy(alpha = 0.5f)
+                feedback.isSuccess -> SuccessGreen.copy(alpha = 0.5f)
+                else -> BorderStroke
+            }
+            val iconTint = when {
+                feedback.isError -> AnomalyRed
+                feedback.isSuccess -> SuccessGreen
+                else -> PrimaryBlueVariant
+            }
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(10.dp),
+                colors = CardDefaults.cardColors(containerColor = bannerBg),
+                border = BorderStroke(1.dp, bannerBorder)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = when {
+                                feedback.isError -> Icons.Default.Warning
+                                feedback.isSuccess -> Icons.Default.CheckCircle
+                                else -> Icons.Default.Sync
+                            },
+                            contentDescription = null,
+                            tint = iconTint,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                text = feedback.message,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = TextWhite,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            if (feedback.timestamp.isNotBlank()) {
+                                Text(
+                                    text = feedback.timestamp,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextMuted
+                                )
+                            }
+                        }
+                    }
+                    IconButton(
+                        onClick = { BroadcastRepository.clearSyncFeedback() },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Dismiss",
+                            tint = TextMuted,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                }
             }
         }
 
@@ -668,6 +779,22 @@ fun TodayBroadcastItemCard(
                     ScheduleStatus.FLAGGED -> {
                         Text(
                             text = "CONFLICT",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = WarningAmber
+                        )
+                    }
+                    ScheduleStatus.CANCELLED -> {
+                        Text(
+                            text = "CANCELLED",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = AnomalyRed
+                        )
+                    }
+                    ScheduleStatus.RESCHEDULED -> {
+                        Text(
+                            text = "RESCHEDULED",
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
                             color = WarningAmber

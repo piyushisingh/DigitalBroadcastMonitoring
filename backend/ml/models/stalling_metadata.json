@@ -1,0 +1,387 @@
+{
+  "model_name": "EarlySessionStallingClassifier",
+  "model_version": "1.1.0",
+  "estimator_type": "RandomForestClassifier",
+  "selected_model": "RandomForest_Balanced_Tuned",
+  "decision_threshold": 0.5,
+  "score_semantics": "uncalibrated_model_estimate",
+  "training_timestamp": "2026-10-28T15:01:06.297521+00:00",
+  "python_version": "3.13.15",
+  "scikit_learn_version": "1.9.1",
+  "dataset": {
+    "name": "MUEXLab YouTube QoE Session Dataset",
+    "attribution": "Multimedia Experience Laboratory (MUEXLab), University of Zagreb & University of W\u00fcrzburg (2020-2021)",
+    "csv_path": "C:\\Users\\piyushi singh\\AndroidStudioProjects\\DigitalBroadcastMonitoring\\backend\\ml\\data\\raw\\session-dataset.csv",
+    "total_rows": 30193,
+    "train_samples": 21179,
+    "val_samples": 4498,
+    "test_samples": 4516,
+    "train_videos": 1358,
+    "val_videos": 291,
+    "test_videos": 291,
+    "split_ratios": {
+      "train": 0.7,
+      "val": 0.15,
+      "test": 0.15
+    },
+    "split_methodology": "GroupShuffleSplit by video identifier with zero inter-split overlap",
+    "random_seed": 42,
+    "feature_selection_rationale": "Only the initial seven session and traffic signals available within the first 10 seconds (year, location, bandwidth, adblock, dl_throughput_first1s, dl_throughput_first5s, dl_throughput_first10s) are accepted as inputs. An internal transformer computes early throughput dynamics (ramp-up ratio, sustaining ratio, drift delta, throughput floor, and mean) strictly from these 7 inputs to maximize early pattern recognition."
+  },
+  "features": {
+    "feature_names": [
+      "year",
+      "location",
+      "bandwidth",
+      "adblock",
+      "dl_throughput_first1s",
+      "dl_throughput_first5s",
+      "dl_throughput_first10s"
+    ],
+    "input_feature_names": [
+      "year",
+      "location",
+      "bandwidth",
+      "adblock",
+      "dl_throughput_first1s",
+      "dl_throughput_first5s",
+      "dl_throughput_first10s"
+    ],
+    "categorical_features": [
+      "year",
+      "location",
+      "bandwidth",
+      "adblock"
+    ],
+    "numeric_features": [
+      "dl_throughput_first1s",
+      "dl_throughput_first5s",
+      "dl_throughput_first10s"
+    ],
+    "numeric_units": "Bytes/s"
+  },
+  "preprocessing": {
+    "feature_transformer": "EarlyThroughputDynamicsTransformer",
+    "numeric_pipeline": [
+      "SimpleImputer(strategy='median')",
+      "StandardScaler()"
+    ],
+    "categorical_pipeline": [
+      "SimpleImputer(strategy='most_frequent')",
+      "OneHotEncoder(handle_unknown='ignore', sparse_output=False)"
+    ]
+  },
+  "target": {
+    "name": "stalling_class",
+    "class_mapping": {
+      "0": "no_stalling",
+      "1": "stalling"
+    },
+    "description": "True indicates stalling occurred during video playback; False indicates smooth playback."
+  },
+  "validation_comparison": {
+    "DummyClassifier": {
+      "accuracy": 0.6116,
+      "balanced_accuracy": 0.5,
+      "macro_f1": 0.3795,
+      "roc_auc": 0.5,
+      "pr_auc": 0.3884,
+      "class_0_no_stalling": {
+        "precision": 0.6116,
+        "recall": 1.0,
+        "f1": 0.759
+      },
+      "class_1_stalling": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "confusion_matrix": [
+        [
+          2751,
+          0
+        ],
+        [
+          1747,
+          0
+        ]
+      ],
+      "decision_threshold": 0.5
+    },
+    "LogisticRegression": {
+      "accuracy": 0.6968,
+      "balanced_accuracy": 0.6672,
+      "macro_f1": 0.6707,
+      "roc_auc": 0.7682,
+      "pr_auc": 0.5944,
+      "class_0_no_stalling": {
+        "precision": 0.7302,
+        "recall": 0.7997,
+        "f1": 0.7634
+      },
+      "class_1_stalling": {
+        "precision": 0.629,
+        "recall": 0.5346,
+        "f1": 0.578
+      },
+      "confusion_matrix": [
+        [
+          2200,
+          551
+        ],
+        [
+          813,
+          934
+        ]
+      ],
+      "decision_threshold": 0.5
+    },
+    "RandomForestClassifier_Baseline": {
+      "accuracy": 0.7955,
+      "balanced_accuracy": 0.7813,
+      "macro_f1": 0.7832,
+      "roc_auc": 0.8653,
+      "pr_auc": 0.8136,
+      "class_0_no_stalling": {
+        "precision": 0.825,
+        "recall": 0.8448,
+        "f1": 0.8348
+      },
+      "class_1_stalling": {
+        "precision": 0.746,
+        "recall": 0.7178,
+        "f1": 0.7316
+      },
+      "confusion_matrix": [
+        [
+          2324,
+          427
+        ],
+        [
+          493,
+          1254
+        ]
+      ],
+      "decision_threshold": 0.5
+    },
+    "ExtraTreesClassifier_Baseline": {
+      "accuracy": 0.7946,
+      "balanced_accuracy": 0.7801,
+      "macro_f1": 0.7822,
+      "roc_auc": 0.8623,
+      "pr_auc": 0.8072,
+      "class_0_no_stalling": {
+        "precision": 0.8238,
+        "recall": 0.8448,
+        "f1": 0.8342
+      },
+      "class_1_stalling": {
+        "precision": 0.7454,
+        "recall": 0.7155,
+        "f1": 0.7301
+      },
+      "confusion_matrix": [
+        [
+          2324,
+          427
+        ],
+        [
+          497,
+          1250
+        ]
+      ],
+      "decision_threshold": 0.5
+    },
+    "HistGradientBoosting_Dynamics": {
+      "accuracy": 0.8097,
+      "balanced_accuracy": 0.7969,
+      "macro_f1": 0.7985,
+      "roc_auc": 0.8833,
+      "pr_auc": 0.8393,
+      "class_0_no_stalling": {
+        "precision": 0.8378,
+        "recall": 0.8542,
+        "f1": 0.8459
+      },
+      "class_1_stalling": {
+        "precision": 0.7631,
+        "recall": 0.7396,
+        "f1": 0.7512
+      },
+      "confusion_matrix": [
+        [
+          2350,
+          401
+        ],
+        [
+          455,
+          1292
+        ]
+      ],
+      "decision_threshold": 0.5
+    },
+    "RandomForest_Balanced_Tuned": {
+      "accuracy": 0.8104,
+      "balanced_accuracy": 0.8034,
+      "macro_f1": 0.8016,
+      "roc_auc": 0.8826,
+      "pr_auc": 0.841,
+      "class_0_no_stalling": {
+        "precision": 0.8523,
+        "recall": 0.8346,
+        "f1": 0.8433
+      },
+      "class_1_stalling": {
+        "precision": 0.7478,
+        "recall": 0.7722,
+        "f1": 0.7598
+      },
+      "confusion_matrix": [
+        [
+          2296,
+          455
+        ],
+        [
+          398,
+          1349
+        ]
+      ],
+      "decision_threshold": 0.5
+    }
+  },
+  "validation_threshold_tuning": [
+    {
+      "threshold": 0.2,
+      "stalling_precision": 0.5666,
+      "stalling_recall": 0.9347,
+      "macro_f1": 0.6967,
+      "balanced_accuracy": 0.7404,
+      "false_positive_rate": 0.454
+    },
+    {
+      "threshold": 0.25,
+      "stalling_precision": 0.6093,
+      "stalling_recall": 0.9044,
+      "macro_f1": 0.7373,
+      "balanced_accuracy": 0.7681,
+      "false_positive_rate": 0.3682
+    },
+    {
+      "threshold": 0.3,
+      "stalling_precision": 0.6374,
+      "stalling_recall": 0.8764,
+      "macro_f1": 0.7569,
+      "balanced_accuracy": 0.7799,
+      "false_positive_rate": 0.3166
+    },
+    {
+      "threshold": 0.35,
+      "stalling_precision": 0.6719,
+      "stalling_recall": 0.8523,
+      "macro_f1": 0.7779,
+      "balanced_accuracy": 0.794,
+      "false_positive_rate": 0.2643
+    },
+    {
+      "threshold": 0.4,
+      "stalling_precision": 0.6998,
+      "stalling_recall": 0.8231,
+      "macro_f1": 0.7891,
+      "balanced_accuracy": 0.7994,
+      "false_positive_rate": 0.2243
+    },
+    {
+      "threshold": 0.45,
+      "stalling_precision": 0.722,
+      "stalling_recall": 0.7985,
+      "macro_f1": 0.7956,
+      "balanced_accuracy": 0.8017,
+      "false_positive_rate": 0.1952
+    },
+    {
+      "threshold": 0.5,
+      "stalling_precision": 0.7478,
+      "stalling_recall": 0.7722,
+      "macro_f1": 0.8016,
+      "balanced_accuracy": 0.8034,
+      "false_positive_rate": 0.1654
+    },
+    {
+      "threshold": 0.55,
+      "stalling_precision": 0.7673,
+      "stalling_recall": 0.7361,
+      "macro_f1": 0.7993,
+      "balanced_accuracy": 0.7972,
+      "false_positive_rate": 0.1418
+    },
+    {
+      "threshold": 0.6,
+      "stalling_precision": 0.7898,
+      "stalling_recall": 0.6926,
+      "macro_f1": 0.7939,
+      "balanced_accuracy": 0.7878,
+      "false_positive_rate": 0.117
+    },
+    {
+      "threshold": 0.65,
+      "stalling_precision": 0.8133,
+      "stalling_recall": 0.6382,
+      "macro_f1": 0.7821,
+      "balanced_accuracy": 0.7726,
+      "false_positive_rate": 0.0931
+    },
+    {
+      "threshold": 0.7,
+      "stalling_precision": 0.8418,
+      "stalling_recall": 0.5695,
+      "macro_f1": 0.7623,
+      "balanced_accuracy": 0.7508,
+      "false_positive_rate": 0.068
+    },
+    {
+      "threshold": 0.75,
+      "stalling_precision": 0.8742,
+      "stalling_recall": 0.4934,
+      "macro_f1": 0.7349,
+      "balanced_accuracy": 0.7242,
+      "false_positive_rate": 0.0451
+    },
+    {
+      "threshold": 0.8,
+      "stalling_precision": 0.8997,
+      "stalling_recall": 0.411,
+      "macro_f1": 0.6962,
+      "balanced_accuracy": 0.691,
+      "false_positive_rate": 0.0291
+    }
+  ],
+  "test_evaluation": {
+    "accuracy": 0.8007,
+    "balanced_accuracy": 0.7909,
+    "macro_f1": 0.7899,
+    "roc_auc": 0.8728,
+    "pr_auc": 0.8281,
+    "class_0_no_stalling": {
+      "precision": 0.8425,
+      "recall": 0.8328,
+      "f1": 0.8376
+    },
+    "class_1_stalling": {
+      "precision": 0.7354,
+      "recall": 0.749,
+      "f1": 0.7421
+    },
+    "confusion_matrix": [
+      [
+        2321,
+        466
+      ],
+      [
+        434,
+        1295
+      ]
+    ],
+    "decision_threshold": 0.5
+  },
+  "provenance_disclaimer": "This model is trained on early-session video streaming QoE research data (initial 10s traffic). It predicts whether an encrypted video session will experience playback stalling. It does NOT detect physical television broadcast faults (e.g., RF transmission loss, black frames, or EBU R128 audio clipping) and the Android application does not automatically acquire live broadcast telemetry."
+}

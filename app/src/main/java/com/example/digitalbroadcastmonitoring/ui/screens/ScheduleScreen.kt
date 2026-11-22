@@ -288,6 +288,12 @@ fun ScheduleItemCard(
                     ScheduleStatus.FLAGGED -> {
                         Text("FLAGGED", color = WarningAmber, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                     }
+                    ScheduleStatus.CANCELLED -> {
+                        Text("CANCELLED", color = AnomalyRed, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                    }
+                    ScheduleStatus.RESCHEDULED -> {
+                        Text("RESCHEDULED", color = WarningAmber, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
 

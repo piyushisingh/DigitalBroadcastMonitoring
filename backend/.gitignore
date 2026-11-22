@@ -1,0 +1,10 @@
+# Backend python environment and caches
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.db
+.pytest_cache/
+ml/data/raw/
+*.csv

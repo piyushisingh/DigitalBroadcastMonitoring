@@ -213,8 +213,17 @@ fun AddScheduleScreen(
                                     hasOverlap = hasOverlap,
                                     notes = notes.trim()
                                 )
-                                BroadcastRepository.addSchedule(newSchedule)
-                                onNavigateBack()
+                                BroadcastRepository.addSchedule(newSchedule) { result ->
+                                    when (result) {
+                                        is com.example.digitalbroadcastmonitoring.data.api.NetworkResult.Success -> {
+                                            onNavigateBack()
+                                        }
+                                        is com.example.digitalbroadcastmonitoring.data.api.NetworkResult.Error -> {
+                                            errorMessage = result.message
+                                        }
+                                        else -> {}
+                                    }
+                                }
                             }
                         },
                         modifier = Modifier
@@ -372,6 +381,8 @@ fun ScheduleDetailScreen(
                                     ScheduleStatus.COMPLETED -> TextMuted
                                     ScheduleStatus.SCHEDULED -> PrimaryBlueVariant
                                     ScheduleStatus.FLAGGED -> WarningAmber
+                                    ScheduleStatus.CANCELLED -> AnomalyRed
+                                    ScheduleStatus.RESCHEDULED -> WarningAmber
                                 }
                             )
                         }
@@ -516,8 +527,17 @@ fun EditScheduleScreen(
                                     hasOverlap = hasOverlap,
                                     notes = notes.trim()
                                 )
-                                BroadcastRepository.updateSchedule(updated)
-                                onNavigateBack()
+                                BroadcastRepository.updateSchedule(updated) { result ->
+                                    when (result) {
+                                        is com.example.digitalbroadcastmonitoring.data.api.NetworkResult.Success -> {
+                                            onNavigateBack()
+                                        }
+                                        is com.example.digitalbroadcastmonitoring.data.api.NetworkResult.Error -> {
+                                            errorMessage = result.message
+                                        }
+                                        else -> {}
+                                    }
+                                }
                             }
                         },
                         modifier = Modifier
